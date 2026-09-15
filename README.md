@@ -28,3 +28,6 @@ Consolidar conhecimentos em Engenharia de Dados através de projetos práticos u
 ## Projetos
 
 Em desenvolvimento.
+
+
+Consultas SQL, exercícios e exemplos utilizados nos estudos.
