@@ -1,8 +1,4 @@
 # Databricks notebook source
-# /// script
-# [tool.databricks.environment]
-# environment_version = "5"
-# ///
 # MAGIC %md
 # MAGIC # Silver — espelho governado do bronze
 # MAGIC
@@ -46,7 +42,7 @@ display(spark.sql("""
       SUM(CASE WHEN partida_real     = 'null' THEN 1 ELSE 0 END)      AS partida_real_string_null,
       SUM(CASE WHEN partida_prevista = 'null' THEN 1 ELSE 0 END)      AS partida_prevista_string_null,
       SUM(CASE WHEN partida_prevista LIKE '%.%' THEN 1 ELSE 0 END)    AS com_fracao_de_segundo
-    FROM voo_bem.bronze.vra
+    FROM voebem.bronze.vra
 """))
 
 # COMMAND ----------
@@ -82,24 +78,24 @@ display(spark.sql("""
 # COMMAND ----------
 
 spark.sql("""
-CREATE OR REPLACE TABLE voo_bem.silver.vra AS
+CREATE OR REPLACE TABLE voebem.silver.vra AS
 WITH tipado AS (
   SELECT
-    replace(icao_empresa, '"', '')      AS icao_empresa,
-    replace(numero_voo, '"', '')        AS numero_voo,
-    replace(codigo_di, '"', '')         AS codigo_di,
-    replace(codigo_tipo_linha, '"', '') AS codigo_tipo_linha,
-    replace(icao_origem, '"', '')      AS icao_origem,
-    replace(icao_destino, '"', '')     AS icao_destino,
-    try_cast(nullif(replace(partida_prevista, '"', ''), 'null') AS TIMESTAMP) AS partida_prevista,
-    try_cast(nullif(replace(partida_real,     '"', ''), 'null') AS TIMESTAMP) AS partida_real,
-    try_cast(nullif(replace(chegada_prevista, '"', ''), 'null') AS TIMESTAMP) AS chegada_prevista,
-    try_cast(nullif(replace(chegada_real,     '"', ''), 'null') AS TIMESTAMP) AS chegada_real,
-    replace(situacao_voo, '"', '')      AS situacao_voo,
-    nullif(replace(codigo_justificativa, '"', ''), 'N/A')  AS codigo_justificativa,
-    __arquivo_origem,
-    __ingerido_em
-  FROM voo_bem.bronze.vra
+    icao_empresa,
+    numero_voo,
+    codigo_di,
+    codigo_tipo_linha,
+    icao_origem,
+    icao_destino,
+    try_cast(nullif(partida_prevista, 'null') AS TIMESTAMP) AS partida_prevista,
+    try_cast(nullif(partida_real,     'null') AS TIMESTAMP) AS partida_real,
+    try_cast(nullif(chegada_prevista, 'null') AS TIMESTAMP) AS chegada_prevista,
+    try_cast(nullif(chegada_real,     'null') AS TIMESTAMP) AS chegada_real,
+    situacao_voo,
+    nullif(codigo_justificativa, 'N/A')                     AS codigo_justificativa,
+    _arquivo_origem,
+    _ingerido_em
+  FROM voebem.bronze.vra
 )
 SELECT
   icao_empresa,
@@ -134,8 +130,8 @@ SELECT
   CAST(timestampdiff(MINUTE, partida_prevista, partida_real)
      - timestampdiff(MINUTE, chegada_prevista, chegada_real) AS INT) AS minutos_recuperados,
 
-  __arquivo_origem,
-  __ingerido_em,
+  _arquivo_origem,
+  _ingerido_em,
   current_timestamp()                                AS _transformado_em
 FROM tipado
 """)
@@ -155,10 +151,10 @@ print("silver.vra criada")
 
 display(spark.sql("""
     SELECT
-      (SELECT COUNT(*) FROM voo_bem.bronze.vra) AS bronze_vra,
-      (SELECT COUNT(*) FROM voo_bem.silver.vra) AS silver_vra,
-      (SELECT COUNT(*) FROM voo_bem.bronze.vra)
-        - (SELECT COUNT(*) FROM voo_bem.silver.vra) AS diferenca
+      (SELECT COUNT(*) FROM voebem.bronze.vra) AS bronze_vra,
+      (SELECT COUNT(*) FROM voebem.silver.vra) AS silver_vra,
+      (SELECT COUNT(*) FROM voebem.bronze.vra)
+        - (SELECT COUNT(*) FROM voebem.silver.vra) AS diferenca
 """))
 
 # COMMAND ----------
@@ -176,19 +172,8 @@ display(spark.sql("""
       COUNT(chegada_real)         AS chegada_real_ok,
       COUNT(atraso_partida_min)   AS atraso_partida_ok,
       COUNT(minutos_recuperados)  AS minutos_recuperados_ok
-    FROM voo_bem.silver.vra
+    FROM voebem.silver.vra
 """))
-
-# COMMAND ----------
-
-# MAGIC %md
-# MAGIC ### Diagonostico de falha 
-
-# COMMAND ----------
-
-# MAGIC %sql
-# MAGIC SELECT COUNT(*)
-# MAGIC FROM voo_bem.silver.vra
 
 # COMMAND ----------
 
@@ -196,7 +181,7 @@ display(spark.sql("""
     SELECT icao_empresa, numero_voo, icao_origem, icao_destino,
            partida_prevista, partida_prevista_data, partida_prevista_hora,
            atraso_partida_min, atraso_chegada_min, minutos_recuperados, situacao_voo
-    FROM voo_bem.silver.vra
+    FROM voebem.silver.vra
     ORDER BY partida_prevista
     LIMIT 5
 """))
@@ -221,7 +206,7 @@ display(spark.sql("""
 # COMMAND ----------
 
 spark.sql("""
-CREATE OR REPLACE TABLE voo_bem.silver.empresas AS
+CREATE OR REPLACE TABLE voebem.silver.empresas AS
 SELECT
   icao,
   sigla_iata,
@@ -234,7 +219,7 @@ SELECT
   _arquivo_origem,
   _ingerido_em,
   current_timestamp() AS _transformado_em
-FROM voo_bem.bronze.empresas_nacionais
+FROM voebem.bronze.empresas_nacionais
 UNION ALL
 SELECT
   icao,
@@ -248,16 +233,16 @@ SELECT
   _arquivo_origem,
   _ingerido_em,
   current_timestamp() AS _transformado_em
-FROM voo_bem.bronze.empresas_estrangeiras
+FROM voebem.bronze.empresas_estrangeiras
 """)
 
 display(spark.sql("""
     SELECT
-      (SELECT COUNT(*) FROM voo_bem.bronze.empresas_nacionais)    AS bronze_nacionais,
-      (SELECT COUNT(*) FROM voo_bem.bronze.empresas_estrangeiras) AS bronze_estrangeiras,
-      (SELECT COUNT(*) FROM voo_bem.bronze.empresas_nacionais)
-        + (SELECT COUNT(*) FROM voo_bem.bronze.empresas_estrangeiras) AS soma_esperada,
-      (SELECT COUNT(*) FROM voo_bem.silver.empresas)              AS silver_empresas
+      (SELECT COUNT(*) FROM voebem.bronze.empresas_nacionais)    AS bronze_nacionais,
+      (SELECT COUNT(*) FROM voebem.bronze.empresas_estrangeiras) AS bronze_estrangeiras,
+      (SELECT COUNT(*) FROM voebem.bronze.empresas_nacionais)
+        + (SELECT COUNT(*) FROM voebem.bronze.empresas_estrangeiras) AS soma_esperada,
+      (SELECT COUNT(*) FROM voebem.silver.empresas)              AS silver_empresas
 """))
 
 # COMMAND ----------
@@ -266,7 +251,7 @@ display(spark.sql("""
     SELECT origem_cadastro,
            COUNT(*) AS linhas,
            COUNT(CASE WHEN icao IS NOT NULL AND icao <> '' THEN 1 END) AS com_icao
-    FROM voo_bem.silver.empresas
+    FROM voebem.silver.empresas
     GROUP BY origem_cadastro
     ORDER BY origem_cadastro
 """))
@@ -300,7 +285,7 @@ display(spark.sql("""
 # COMMAND ----------
 
 spark.sql("""
-CREATE OR REPLACE TABLE voo_bem.silver.aerodromos AS
+CREATE OR REPLACE TABLE voebem.silver.aerodromos AS
 SELECT
   icao,
   ciad,
@@ -315,27 +300,27 @@ SELECT
   situacao,
   _ingerido_em,
   current_timestamp()                           AS _transformado_em
-FROM voo_bem.bronze.aerodromos
+FROM voebem.bronze.aerodromos
 """)
 
 spark.sql("""
-CREATE OR REPLACE TABLE voo_bem.silver.codigos_operacao AS
+CREATE OR REPLACE TABLE voebem.silver.codigos_operacao AS
 SELECT
   dominio,
   codigo,
   descricao,
   current_timestamp() AS _transformado_em
-FROM voo_bem.bronze.codigos_operacao
+FROM voebem.bronze.codigos_operacao
 """)
 
 display(spark.sql("""
     SELECT 'aerodromos' AS tabela,
-           (SELECT COUNT(*) FROM voo_bem.bronze.aerodromos) AS bronze,
-           (SELECT COUNT(*) FROM voo_bem.silver.aerodromos) AS silver
+           (SELECT COUNT(*) FROM voebem.bronze.aerodromos) AS bronze,
+           (SELECT COUNT(*) FROM voebem.silver.aerodromos) AS silver
     UNION ALL
     SELECT 'codigos_operacao',
-           (SELECT COUNT(*) FROM voo_bem.bronze.codigos_operacao),
-           (SELECT COUNT(*) FROM voo_bem.silver.codigos_operacao)
+           (SELECT COUNT(*) FROM voebem.bronze.codigos_operacao),
+           (SELECT COUNT(*) FROM voebem.silver.codigos_operacao)
 """))
 
 # COMMAND ----------
@@ -377,13 +362,13 @@ COMENTARIOS_VRA = {
     "atraso_partida_min":      "Minutos entre a partida programada e a partida efetiva. Positivo e atraso, negativo e antecipacao. Aritmetica pura: nao aplica limiar de pontualidade.",
     "atraso_chegada_min":      "Minutos entre a chegada programada e a chegada efetiva. Positivo e atraso, negativo e antecipacao.",
     "minutos_recuperados":     "Minutos que a etapa recuperou em voo: atraso de partida menos atraso de chegada. Positivo significa que chegou menos atrasada do que saiu.",
-    "__arquivo_origem":        "Auditoria: nome do arquivo CSV mensal da ANAC de onde a linha veio.",
-    "__ingerido_em":           "Auditoria: momento em que a linha entrou no bronze.",
+    "_arquivo_origem":         "Auditoria: nome do arquivo CSV mensal da ANAC de onde a linha veio.",
+    "_ingerido_em":            "Auditoria: momento em que a linha entrou no bronze.",
     "_transformado_em":        "Auditoria: momento em que a silver foi reconstruida a partir do bronze.",
 }
 
 for coluna, comentario in COMENTARIOS_VRA.items():
-    spark.sql(f"ALTER TABLE voo_bem.silver.vra ALTER COLUMN {coluna} COMMENT '{comentario}'")
+    spark.sql(f"ALTER TABLE voebem.silver.vra ALTER COLUMN {coluna} COMMENT '{comentario}'")
 
 print(f"{len(COMENTARIOS_VRA)} colunas comentadas em silver.vra")
 
@@ -427,9 +412,9 @@ COMENTARIOS_CODIGOS = {
 }
 
 for tabela, mapa in [
-    ("voo_bem.silver.empresas",         COMENTARIOS_EMPRESAS),
-    ("voo_bem.silver.aerodromos",       COMENTARIOS_AERODROMOS),
-    ("voo_bem.silver.codigos_operacao", COMENTARIOS_CODIGOS),
+    ("voebem.silver.empresas",         COMENTARIOS_EMPRESAS),
+    ("voebem.silver.aerodromos",       COMENTARIOS_AERODROMOS),
+    ("voebem.silver.codigos_operacao", COMENTARIOS_CODIGOS),
 ]:
     for coluna, comentario in mapa.items():
         spark.sql(f"ALTER TABLE {tabela} ALTER COLUMN {coluna} COMMENT '{comentario}'")
@@ -445,26 +430,26 @@ for tabela, mapa in [
 # COMMAND ----------
 
 TABELAS = {
-    "voo_bem.silver.vra": (
+    "voebem.silver.vra": (
         "Silver - espelho governado de bronze.vra. Mesmo grao (uma linha por etapa de voo) e "
         "MESMA contagem de linhas do bronze: sem filtro, sem agregacao e sem regra de negocio. "
         "Traz tipagem, data e hora separadas e as tres metricas de aritmetica pura de atraso. "
         "Pontualidade, escopo e exclusoes ficam na gold.",
         {"camada": "silver", "dominio": "aviacao", "fonte": "ANAC-VRA", "grao": "etapa_de_voo"},
     ),
-    "voo_bem.silver.empresas": (
+    "voebem.silver.empresas": (
         "Silver - cadastro unificado de empresas aereas: uniao dos dois cadastros do bronze "
         "(nacionais e estrangeiras) com a coluna origem_cadastro preservando a fonte de cada registro. "
         "Contagem igual a soma exata das duas tabelas de origem.",
         {"camada": "silver", "dominio": "aviacao", "fonte": "ANAC-Operador-Aereo", "grao": "empresa"},
     ),
-    "voo_bem.silver.aerodromos": (
+    "voebem.silver.aerodromos": (
         "Silver - espelho governado do cadastro de aerodromos publicos da ANAC. Cobre apenas "
         "aerodromos brasileiros: aeroportos estrangeiros do VRA nao constam aqui, e isso e "
         "propriedade da fonte, nao defeito.",
         {"camada": "silver", "dominio": "aviacao", "fonte": "ANAC-Aerodromos", "grao": "aerodromo"},
     ),
-    "voo_bem.silver.codigos_operacao": (
+    "voebem.silver.codigos_operacao": (
         "Silver - espelho da seed table de codigos de operacao (DI e tipo de linha) com as "
         "descricoes oficiais da ANAC.",
         {"camada": "silver", "dominio": "aviacao", "fonte": "ANAC-seed", "grao": "codigo"},
@@ -492,7 +477,7 @@ display(spark.sql("""
            SUM(CASE WHEN comment IS NULL OR comment = '' THEN 1 ELSE 0 END)  AS sem_comentario,
            ROUND(100.0 * SUM(CASE WHEN comment IS NOT NULL AND comment <> '' THEN 1 ELSE 0 END)
                  / COUNT(*), 1)                                              AS pct_documentado
-    FROM voo_bem.information_schema.columns
+    FROM voebem.information_schema.columns
     WHERE table_schema = 'silver'
     GROUP BY table_name
     ORDER BY table_name
@@ -502,7 +487,7 @@ display(spark.sql("""
 
 display(spark.sql("""
     SELECT table_name, tag_name, tag_value
-    FROM voo_bem.information_schema.table_tags
+    FROM voebem.information_schema.table_tags
     WHERE schema_name = 'silver'
     ORDER BY table_name, tag_name
 """))
@@ -522,4 +507,4 @@ display(spark.sql("""
 
 # COMMAND ----------
 
-display(spark.sql("SHOW TABLES IN voo_bem.silver"))
+display(spark.sql("SHOW TABLES IN voebem.silver"))
