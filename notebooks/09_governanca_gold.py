@@ -1,4 +1,8 @@
 # Databricks notebook source
+# /// script
+# [tool.databricks.environment]
+# environment_version = "5"
+# ///
 # MAGIC %md
 # MAGIC # Governança da gold — documentação, tags e lineage
 # MAGIC
@@ -38,7 +42,7 @@ display(spark.sql("""
       SUM(CASE WHEN atraso_chegada_min <= 0 THEN 1 ELSE 0 END)      AS chegou_adiantado_ou_no_horario,
       SUM(CASE WHEN atraso_chegada_min >  0 THEN 1 ELSE 0 END)      AS chegou_atrasado_mesmo_assim,
       SUM(CASE WHEN atraso_chegada_min > 15 THEN 1 ELSE 0 END)      AS chegou_atrasado_mais_de_15
-    FROM voebem.gold.obt_voos
+    FROM voo_bem.gold.obt_voos
     WHERE minutos_recuperados > 0
 """))
 
@@ -68,7 +72,7 @@ display(spark.sql("""
     SELECT situacao_voo,
            COUNT(*)                                                AS voos,
            SUM(CASE WHEN partida_pontual IS NULL THEN 1 ELSE 0 END) AS partida_pontual_null
-    FROM voebem.gold.obt_voos GROUP BY situacao_voo
+    FROM voo_bem.gold.obt_voos GROUP BY situacao_voo
 """))
 
 # COMMAND ----------
@@ -137,7 +141,7 @@ COMENTARIOS_OBT = {
 }
 
 for coluna, comentario in COMENTARIOS_OBT.items():
-    spark.sql(f"ALTER TABLE voebem.gold.obt_voos ALTER COLUMN {coluna} COMMENT '{comentario}'")
+    spark.sql(f"ALTER TABLE voo_bem.gold.obt_voos ALTER COLUMN {coluna} COMMENT '{comentario}'")
 
 print(f"{len(COMENTARIOS_OBT)} colunas comentadas em gold.obt_voos")
 
@@ -172,11 +176,11 @@ COLUNAS_FATO = [c for c in COMENTARIOS_FATO if c not in (
     "rota_icao", "rota_municipios")]
 
 for coluna in COLUNAS_FATO:
-    spark.sql(f"ALTER TABLE voebem.gold.fato_voos ALTER COLUMN {coluna} COMMENT '{COMENTARIOS_FATO[coluna]}'")
+    spark.sql(f"ALTER TABLE voo_bem.gold.fato_voos ALTER COLUMN {coluna} COMMENT '{COMENTARIOS_FATO[coluna]}'")
 print(f"{len(COLUNAS_FATO)} colunas comentadas em gold.fato_voos")
 
 for coluna, comentario in COMENTARIOS_DIM.items():
-    spark.sql(f"ALTER TABLE voebem.gold.dim_aeroporto ALTER COLUMN {coluna} COMMENT '{comentario}'")
+    spark.sql(f"ALTER TABLE voo_bem.gold.dim_aeroporto ALTER COLUMN {coluna} COMMENT '{comentario}'")
 print(f"{len(COMENTARIOS_DIM)} colunas comentadas em gold.dim_aeroporto")
 
 # COMMAND ----------
@@ -187,21 +191,21 @@ print(f"{len(COMENTARIOS_DIM)} colunas comentadas em gold.dim_aeroporto")
 # COMMAND ----------
 
 TABELAS_GOLD = {
-    "voebem.gold.obt_voos": (
+    "voo_bem.gold.obt_voos": (
         "Gold - One Big Table de voos da ANAC, desnormalizada e desenhada para consumo por agente de IA. "
         "Uma linha por etapa de voo, com nomes ja resolvidos e metricas prontas: responde as perguntas de "
         "negocio do projeto sem nenhum JOIN. Criterio de pontualidade: 15 minutos. "
         "Voo cancelado nao tem metrica de atraso.",
         {"camada": "gold", "dominio": "aviacao", "consumo": "genie", "grao": "etapa_de_voo", "padrao": "obt"},
     ),
-    "voebem.gold.fato_voos": (
+    "voo_bem.gold.fato_voos": (
         "Gold - fato de voos no grao de uma linha por etapa, com companhia e codigos de operacao como "
         "dimensoes degeneradas. E aqui que nascem as regras de negocio: pontualidade a 15 minutos, "
         "escopo domestico/internacional e as decisoes sobre a quarentena. "
         "Contagem = silver.vra menos 41 duplicatas exatas.",
         {"camada": "gold", "dominio": "aviacao", "consumo": "bi", "grao": "etapa_de_voo", "padrao": "fato"},
     ),
-    "voebem.gold.dim_aeroporto": (
+    "voo_bem.gold.dim_aeroporto": (
         "Gold - dimensao de aeroporto, servindo origem e destino do fato. Construida a partir dos codigos "
         "presentes no fato e enriquecida pelo cadastro da ANAC, para cobrir 100 por cento do fato inclusive "
         "os aeroportos estrangeiros, que a ANAC nao cadastra.",
@@ -226,7 +230,7 @@ display(spark.sql("""
     SELECT table_schema, table_name,
            COUNT(*)                                                         AS colunas,
            SUM(CASE WHEN comment IS NULL OR comment = '' THEN 1 ELSE 0 END) AS sem_comentario
-    FROM voebem.information_schema.columns
+    FROM voo_bem.information_schema.columns
     WHERE table_schema IN ('silver', 'gold')
     GROUP BY table_schema, table_name
     ORDER BY table_schema, table_name
@@ -236,7 +240,7 @@ display(spark.sql("""
 
 display(spark.sql("""
     SELECT table_name, tag_name, tag_value
-    FROM voebem.information_schema.table_tags
+    FROM voo_bem.information_schema.table_tags
     WHERE schema_name = 'gold'
     ORDER BY table_name, tag_name
 """))
@@ -256,8 +260,8 @@ display(spark.sql("""
       COALESCE(nullif(source_table_full_name, ''), '(arquivo no volume)') AS origem,
       target_table_full_name                                             AS destino
     FROM system.access.table_lineage
-    WHERE target_table_full_name LIKE 'voebem.%'
-      AND event_date >= current_date() - 7
+    WHERE target_table_full_name LIKE 'voo_bem.%'
+      AND event_date >= current_date() - INTERVAL 7 DAYS
     GROUP BY 1, 2
     ORDER BY destino, origem
 """))
